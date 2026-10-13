@@ -68,4 +68,8 @@ Os registros são constantes em memória; não há acesso a arquivos arbitrário
 - 103: Solicitação de alteração de senha — prioridade baixa — resolvido.
 - 104: Computador sem conexão de rede — prioridade alta — aberto.
 
-**Importante:** executem o projeto no computador do grupo e ajustem o relatório para registrar apenas testes e resultados realmente observados.
+## Testes
+<img width="978" height="610" alt="image" src="https://github.com/user-attachments/assets/7f39a92b-810c-45d3-9955-ff4f57a16e2a" />
+
+<img width="991" height="680" alt="image" src="https://github.com/user-attachments/assets/4caa2244-c228-4921-b1b0-87f95e6268fd" />
+
