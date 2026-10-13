@@ -1,0 +1,34 @@
+[
+  {
+    "id": 101,
+    "titulo": "Falha no login",
+    "descricao": "Usuários não conseguem acessar o sistema interno.",
+    "prioridade": "alta",
+    "status": "fechado",
+    "solicitante": "Ana"
+  },
+  {
+    "id": 102,
+    "titulo": "Erro ao gerar relatório",
+    "descricao": "O relatório mensal apresenta erro ao exportar.",
+    "prioridade": "media",
+    "status": "aberto",
+    "solicitante": "Carlos"
+  },
+  {
+    "id": 103,
+    "titulo": "Solicitação de alteração de senha",
+    "descricao": "Usuário precisa redefinir a senha de acesso.",
+    "prioridade": "baixa",
+    "status": "fechado",
+    "solicitante": "Marina"
+  },
+  {
+    "id": 104,
+    "titulo": "Computador sem conexão de rede",
+    "descricao": "Estação de trabalho não acessa recursos da rede.",
+    "prioridade": "alta",
+    "status": "aberto",
+    "solicitante": "João"
+  }
+]

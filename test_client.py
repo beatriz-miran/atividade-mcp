@@ -1,5 +1,6 @@
-"""Cliente de teste MCP: inicializa o servidor e testa descoberta e chamadas."""
+"""Verifica o protocolo MCP sem alterar os chamados."""
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -7,69 +8,154 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-async def main() -> None:
-    server_file = Path(__file__).with_name("server.py").resolve()
-    params = StdioServerParameters(
-        command=sys.executable,
-        args=[str(server_file)],
-        env=None,
+def extrair_dados(resultado):
+    if resultado.structuredContent is not None:
+        dados = resultado.structuredContent
+        if set(dados) == {"result"}:
+            return dados["result"]
+        return dados
+
+    textos = [
+        json.loads(item.text)
+        for item in resultado.content
+        if hasattr(item, "text")
+    ]
+
+    return textos[0] if len(textos) == 1 else textos
+
+
+async def testar_tool(session, nome, argumentos, espera_erro=False):
+    print(f"\nTESTE: {nome} {argumentos}")
+
+    resultado = await session.call_tool(
+        nome,
+        arguments=argumentos,
     )
 
-    async with stdio_client(params) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
+    for item in resultado.content:
+        if hasattr(item, "text"):
+            print(item.text)
+
+    assert resultado.isError == espera_erro, (
+        f"Resultado inesperado em {nome}: "
+        f"isError={resultado.isError}"
+    )
+
+    print("APROVADO: indicador de erro conforme esperado.")
+
+    return resultado
+
+
+async def main():
+    parametros = StdioServerParameters(
+        command=sys.executable,
+        args=[str(Path(__file__).with_name("server.py").resolve())],
+    )
+
+    async with stdio_client(parametros) as (leitura, escrita):
+        async with ClientSession(leitura, escrita) as session:
             await session.initialize()
 
             tools = await session.list_tools()
             resources = await session.list_resources()
             prompts = await session.list_prompts()
 
-            print("=== DESCOBERTA MCP ===")
-            print("Tools:", [tool.name for tool in tools.tools])
-            print("Resources:", [resource.uri for resource in resources.resources])
-            print("Prompts:", [prompt.name for prompt in prompts.prompts])
+            nomes = {tool.name for tool in tools.tools}
+            uris = {str(resource.uri) for resource in resources.resources}
+            nomes_prompts = {prompt.name for prompt in prompts.prompts}
 
-            print("\n=== CHAMADA: consultar_chamado(101) ===")
-            result = await session.call_tool(
-                "consultar_chamado", arguments={"id": 101}
+            print("Tools:", sorted(nomes))
+            print("Resources:", sorted(uris))
+            print("Prompts:", sorted(nomes_prompts))
+
+            assert {
+                "consultar_chamado",
+                "listar_chamados",
+                "filtrar_chamados",
+                "fechar_chamado",
+            } <= nomes
+
+            assert {
+                "suporte://politica",
+                "suporte://chamados",
+            } <= uris
+
+            assert "analisar_chamado" in nomes_prompts
+            print("APROVADO: inicialização e descoberta.")
+
+            resource = await session.read_resource("suporte://chamados")
+            registros = json.loads(resource.contents[0].text)
+
+            politica = await session.read_resource("suporte://politica")
+            assert politica.contents[0].text
+            print("\nPOLÍTICA:", politica.contents[0].text)
+            print("APROVADO: leitura das Resources.")
+
+            resultado = await testar_tool(
+                session, "consultar_chamado", {"id": 101}
             )
-            for item in result.content:
-                if hasattr(item, "text"):
-                    print(item.text)
-            print("isError:", result.isError)
+            chamado = extrair_dados(resultado)
 
-            print("\n=== CHAMADA: listar_chamados(prioridade='alta') ===")
-            result = await session.call_tool(
-                "listar_chamados", arguments={"prioridade": "alta"}
+            assert chamado["id"] == 101
+            assert chamado["titulo"] == "Falha no login"
+            assert chamado["prioridade"] == "alta"
+            assert chamado["status"] in {"aberto", "fechado"}
+            assert chamado == next(
+                c for c in registros if c["id"] == 101
             )
-            for item in result.content:
-                if hasattr(item, "text"):
-                    print(item.text)
-            print("isError:", result.isError)
+            print("APROVADO: dados do chamado 101.")
 
-            print("\n=== LEITURA DA RESOURCE ===")
-            resource_result = await session.read_resource("suporte://chamados")
-            for item in resource_result.contents:
-                if hasattr(item, "text"):
-                    print(item.text)
-
-            print("\n=== ERRO ESPERADO: chamado inexistente ===")
-            result = await session.call_tool(
-                "consultar_chamado", arguments={"id": 999}
+            resultado = await testar_tool(
+                session, "listar_chamados", {}
             )
-            for item in result.content:
-                if hasattr(item, "text"):
-                    print(item.text)
-            print("isError:", result.isError)
+            assert extrair_dados(resultado) == registros
+            print("APROVADO: listagem completa.")
 
-            print("\n=== PROMPT ===")
-            prompt_result = await session.get_prompt(
-                "analisar_chamado", arguments={"id": 101}
+            for prioridade in ("alta", "media", "baixa"):
+                resultado = await testar_tool(
+                    session,
+                    "filtrar_chamados",
+                    {"prioridade": prioridade},
+                )
+                esperado = [
+                    c for c in registros
+                    if c["prioridade"] == prioridade
+                ]
+                assert extrair_dados(resultado) == esperado
+                print(f"APROVADO: filtro {prioridade}.")
+
+            casos_invalidos = [
+                ("consultar_chamado", {"id": 999}),
+                ("consultar_chamado", {"id": -1}),
+                ("consultar_chamado", {"id": "abc"}),
+                ("filtrar_chamados", {"prioridade": "urgente"}),
+                ("listar_chamados", {"status": "urgente"}),
+            ]
+
+            for nome, argumentos in casos_invalidos:
+                await testar_tool(
+                    session,
+                    nome,
+                    argumentos,
+                    espera_erro=True,
+                )
+
+            prompt = await session.get_prompt(
+                "analisar_chamado",
+                arguments={"id": "101"},
             )
-            for message in prompt_result.messages:
-                content = message.content
-                if hasattr(content, "text"):
-                    print(content.text)
+            assert prompt.messages
+            assert "101" in prompt.messages[0].content.text
+            print("\nPROMPT:", prompt.messages[0].content.text)
+            print("APROVADO: obtenção do Prompt.")
+
+            depois = await session.read_resource("suporte://chamados")
+            assert json.loads(depois.contents[0].text) == registros
+            print("APROVADO: registros permaneceram iguais.")
+
+            print("\nTODOS OS TESTES DE LEITURA PASSARAM.")
 
 
 if __name__ == "__main__":
+    print("Iniciando verificação MCP...")
     asyncio.run(main())
