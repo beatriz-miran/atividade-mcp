@@ -1,10 +1,10 @@
 # Implementação de MCP em um assistente de suporte
 
 **Curso:** Análise e Desenvolvimento de Sistemas — 6º semestre  
-**Integrantes:** [preencher nomes do grupo]  
-**Disciplina:** [preencher]  
-**Professor(a):** [preencher]  
-**Data:** [preencher]
+**Integrantes:** Beatriz Miranda Solera e Giovana Isis Ferreira da Silva  
+**Disciplina:** Tópicos Especiais em Informática  
+**Professor(a):** Túlio Santos de Souza
+**Data:** 13/10/2026
 
 ## 1. Introdução
 
